@@ -1,4 +1,8 @@
 version: 2
+release_only: &release_only
+  filters:
+    branches:
+      only: release
 jobs:
   build:
     working_directory: ~/server
@@ -85,14 +89,14 @@ workflows:
     jobs:
       - build
       - up_network:
+          <<: *release_only
           requires:
             - build
       - start_server:
+          <<: *release_only
           requires:
             - up_network
       - run_client:
+          <<: *release_only
           requires:
             - start_server
-          filters:
-            branches:
-              only: release
