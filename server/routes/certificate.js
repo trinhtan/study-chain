@@ -1,11 +1,10 @@
 const router = require('express').Router();
 const USER_ROLES = require('../configs/constant').USER_ROLES;
-const STATUS_CERT = require('../configs/constant').STATUS_CERT;
 const network = require('../fabric/network');
 const { check, body, validationResult } = require('express-validator');
 const checkJWT = require('../middlewares/check-jwt');
 const Certificate = require('../models/Certificate');
-const User = require('../models/User');
+const axios = require('axios');
 const uuidv4 = require('uuid/v4');
 require('dotenv').config();
 
@@ -184,6 +183,50 @@ router.get(
     cert.Fullname = student.Fullname;
 
     return res.json({ cert });
+  }
+);
+
+router.get(
+  '/:certId/verify',
+  check('certId')
+    .trim()
+    .escape(),
+  async (req, res) => {
+    let certId = req.params.certId;
+    let adminStudent = { role: USER_ROLES.ADMIN_STUDENT, username: 'adminstudent' };
+    let networkObj = await network.connectToNetwork(adminStudent);
+
+    if (!networkObj) {
+      return res.status(500).json({
+        success: false,
+        msg: 'Failed to connect blockchain'
+      });
+    }
+
+    let certInfo = await network.query(networkObj, 'GetHistoryOfCertificate', certId);
+
+    if (!certInfo.success) {
+      return res.status(500).json({
+        success: false,
+        msg: 'Can not query history of certificate!'
+      });
+    }
+
+    certInfo = JSON.parse(certInfo.msg);
+
+    let explorerHost = process.env.EXPLORER_HOST;
+
+    let response = await axios.get(`${explorerHost}/api/curChannel`);
+    let channel = response.data.currentChannel;
+    let txId = String(certInfo[0].TxId);
+
+    response = await axios.get(`${explorerHost}/api/transaction/${channel}/${txId}`);
+
+    return res.status(200).json({
+      success: true,
+      certInfo: certInfo,
+      transactionInfo: response.data
+    });
   }
 );
 
